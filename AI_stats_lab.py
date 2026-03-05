@@ -82,7 +82,34 @@ def gradient_descent_linreg(
     Returns GDResult with final theta, per-epoch losses, and theta trajectory.
     """
     # TODO: implement
-    raise NotImplementedError
+    n, d = X.shape
+    y = y.reshape(-1)
+
+    if theta0 is None:
+        theta = np.zeros(d)
+    else:
+        theta = theta0.copy()
+
+    losses = []
+    theta_path = []
+
+    for _ in range(epochs):
+
+        y_pred = X @ theta
+        error = y_pred - y
+
+        loss = np.mean(error ** 2)
+        losses.append(loss)
+        theta_path.append(theta.copy())
+
+        grad = (2 / n) * (X.T @ error)
+        theta = theta - lr * grad
+
+    return GDResult(
+        theta=theta,
+        losses=np.array(losses),
+        thetas=np.array(theta_path),
+    )
 
 
 def visualize_gradient_descent(
@@ -107,7 +134,24 @@ def visualize_gradient_descent(
     Inspired by AML lecture gradient descent trajectory visualization. :contentReference[oaicite:1]{index=1}
     """
     # TODO: implement using gradient_descent_linreg and a synthetic dataset
-    raise NotImplementedError
+    np.random.seed(seed)
+
+    n = 100
+    X_raw = np.random.randn(n, 1)
+    true_theta = np.array([2.0, 3.0])
+
+    X = add_bias_column(X_raw)
+    noise = 0.5 * np.random.randn(n)
+    y = X @ true_theta + noise
+
+    result = gradient_descent_linreg(X, y, lr=lr, epochs=epochs)
+
+    return {
+        "theta_path": result.thetas,
+        "losses": result.losses,
+        "X": X,
+        "y": y,
+    }
 
 
 # =========================
@@ -127,7 +171,36 @@ def diabetes_linear_gd(
       train_mse, test_mse, train_r2, test_r2, theta
     """
     # TODO: implement
-    raise NotImplementedError
+    from sklearn.model_selection import train_test_split
+
+    data = datasets.load_diabetes()
+    X = data.data
+    y = data.target
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=seed
+    )
+
+    X_train, X_test, _, _ = standardize_train_test(X_train, X_test)
+
+    X_train = add_bias_column(X_train)
+    X_test = add_bias_column(X_test)
+
+    result = gradient_descent_linreg(
+        X_train, y_train, lr=lr, epochs=epochs
+    )
+
+    theta = result.theta
+
+    train_pred = X_train @ theta
+    test_pred = X_test @ theta
+
+    train_mse = mse(y_train, train_pred)
+    test_mse = mse(y_test, test_pred)
+    train_r2 = r2_score(y_train, train_pred)
+    test_r2 = r2_score(y_test, test_pred)
+
+    return train_mse, test_mse, train_r2, test_r2, theta
 
 
 # =========================
@@ -149,7 +222,37 @@ def diabetes_linear_analytical(
       train_mse, test_mse, train_r2, test_r2, theta
     """
     # TODO: implement
-    raise NotImplementedError
+    from sklearn.model_selection import train_test_split
+
+    data = datasets.load_diabetes()
+    X = data.data
+    y = data.target
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=seed
+    )
+
+    X_train, X_test, _, _ = standardize_train_test(X_train, X_test)
+
+    X_train = add_bias_column(X_train)
+    X_test = add_bias_column(X_test)
+
+    n, d = X_train.shape
+
+    I = np.eye(d)
+    theta = np.linalg.inv(
+        X_train.T @ X_train + ridge_lambda * I
+    ) @ X_train.T @ y_train
+
+    train_pred = X_train @ theta
+    test_pred = X_test @ theta
+
+    train_mse = mse(y_train, train_pred)
+    test_mse = mse(y_test, test_pred)
+    train_r2 = r2_score(y_train, train_pred)
+    test_r2 = r2_score(y_test, test_pred)
+
+    return train_mse, test_mse, train_r2, test_r2, theta
 
 
 # =========================
@@ -176,4 +279,24 @@ def diabetes_compare_gd_vs_analytical(
     (Cosine similarity near 1 means parameters align.)
     """
     # TODO: implement
-    raise NotImplementedError
+    gd_train_mse, gd_test_mse, gd_train_r2, gd_test_r2, theta_gd = \
+        diabetes_linear_gd(lr, epochs, test_size, seed)
+
+    an_train_mse, an_test_mse, an_train_r2, an_test_r2, theta_an = \
+        diabetes_linear_analytical(1e-8, test_size, seed)
+
+    theta_l2_diff = np.linalg.norm(theta_gd - theta_an)
+
+    cosine_sim = (
+        np.dot(theta_gd, theta_an)
+        / (np.linalg.norm(theta_gd) * np.linalg.norm(theta_an))
+    )
+
+    return {
+        "theta_l2_diff": float(theta_l2_diff),
+        "train_mse_diff": float(gd_train_mse - an_train_mse),
+        "test_mse_diff": float(gd_test_mse - an_test_mse),
+        "train_r2_diff": float(gd_train_r2 - an_train_r2),
+        "test_r2_diff": float(gd_test_r2 - an_test_r2),
+        "theta_cosine_sim": float(cosine_sim),
+    }
